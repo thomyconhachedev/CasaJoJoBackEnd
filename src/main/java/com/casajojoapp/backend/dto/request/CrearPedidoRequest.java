@@ -26,6 +26,5 @@ public record CrearPedidoRequest(
         String observaciones,
 
         @NotEmpty(message = "El pedido debe incluir al menos un ítem")
-        @Valid
-        List<ItemPedidoRequest> items) {
+        List<@Valid ItemPedidoRequest> items) {
 }
