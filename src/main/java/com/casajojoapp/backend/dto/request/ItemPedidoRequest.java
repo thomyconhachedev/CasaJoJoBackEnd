@@ -9,5 +9,11 @@ public record ItemPedidoRequest(
 
         @NotNull(message = "cantidad es obligatoria")
         @Min(value = 1, message = "La cantidad debe ser al menos 1")
-        Integer cantidad) {
+        Integer cantidad,
+
+        String observacion
+) {
+    public ItemPedidoRequest(Long itemMenuId, Integer cantidad) {
+        this(itemMenuId, cantidad, null);
+    }
 }

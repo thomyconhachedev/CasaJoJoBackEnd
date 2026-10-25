@@ -76,11 +76,19 @@ public class PedidoServiceImpl implements PedidoService {
 
         // Se agrupan los ítems repetidos y se ordenan por id: bloquear siempre en el mismo orden evita interbloqueos.
         Map<Long, Integer> cantidades = new TreeMap<>();
+        // Guardar observacion por item si viene
+        Map<Long, String> observacionesPorItem = new java.util.HashMap<>();
         for (ItemPedidoRequest item : request.items()) {
             if (item == null || item.itemMenuId() == null || item.cantidad() == null || item.cantidad() < 1) {
                 throw BusinessRuleException.invalida("Cada ítem debe indicar itemMenuId y una cantidad mayor o igual a 1.");
             }
             cantidades.merge(item.itemMenuId(), item.cantidad(), Integer::sum);
+            if (item.observacion() != null && !item.observacion().trim().isBlank()) {
+                // Si hay varias lineas para el mismo item, concatenar o tomar la primera; aquí tomamos la primera no vacía
+                if (!observacionesPorItem.containsKey(item.itemMenuId())) {
+                    observacionesPorItem.put(item.itemMenuId(), item.observacion().trim());
+                }
+            }
         }
 
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
@@ -128,6 +136,9 @@ public class PedidoServiceImpl implements PedidoService {
             detalle.setNombreItem(item.getNombre());
             detalle.setCantidad(entrada.getValue());
             detalle.setPrecioHistorico(item.getPrecio());
+            // Buscar observacion para este item si viene en el request
+            String obsItem = observacionesPorItem.get(entrada.getKey());
+            detalle.setObservacion(obsItem);
             pedido.agregarDetalle(detalle);
 
             total = total.add(item.getPrecio().multiply(BigDecimal.valueOf(entrada.getValue())));
@@ -205,9 +216,12 @@ public class PedidoServiceImpl implements PedidoService {
         if (permitido == null) {
             throw BusinessRuleException.conflicto("El pedido ya fue ENTREGADO y no admite más cambios de estado.");
         }
-        if (nuevoEstado != permitido) {
+        if (nuevoEstado != permitido && nuevoEstado != EstadoPedido.CANCELADO) {
             throw BusinessRuleException.conflicto("Transición no permitida: " + actual + " a " + nuevoEstado
                     + ". El siguiente estado válido es " + permitido + ".");
+        }
+        if (nuevoEstado == EstadoPedido.CANCELADO && (actual == EstadoPedido.LISTO_PARA_RETIRO || actual == EstadoPedido.ENTREGADO)) {
+            throw BusinessRuleException.conflicto("No se puede cancelar un pedido en estado " + actual + ".");
         }
 
         pedido.setEstado(nuevoEstado);
@@ -247,7 +261,7 @@ public class PedidoServiceImpl implements PedidoService {
 
     private PedidoResponse aResponse(Pedido p) {
         List<DetallePedidoResponse> detalles = p.getDetalles().stream()
-                .map(d -> new DetallePedidoResponse(d.getItemMenuId(), d.getNombreItem(), d.getCantidad(), d.getPrecioHistorico()))
+                .map(d -> new DetallePedidoResponse(d.getItemMenuId(), d.getNombreItem(), d.getCantidad(), d.getPrecioHistorico(), d.getObservacion()))
                 .toList();
         return new PedidoResponse(
                 p.getId(),

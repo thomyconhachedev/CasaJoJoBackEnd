@@ -10,7 +10,8 @@ public enum EstadoPedido {
     RECIBIDO,
     EN_PREPARACION,
     LISTO_PARA_RETIRO,
-    ENTREGADO;
+    ENTREGADO,
+    CANCELADO;
 
     /** Unico estado al que puede pasar desde este (null si ya es el ultimo). */
     public EstadoPedido siguiente() {
@@ -19,6 +20,7 @@ public enum EstadoPedido {
             case EN_PREPARACION -> LISTO_PARA_RETIRO;
             case LISTO_PARA_RETIRO -> ENTREGADO;
             case ENTREGADO -> null;
+            case CANCELADO -> null;
         };
     }
 

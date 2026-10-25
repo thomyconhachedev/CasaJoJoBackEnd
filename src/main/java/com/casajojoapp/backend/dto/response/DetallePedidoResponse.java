@@ -6,5 +6,6 @@ public record DetallePedidoResponse(
         Long itemMenuId,
         String nombreItem,
         Integer cantidad,
-        BigDecimal precioUnitario) {
+        BigDecimal precioUnitario,
+        String observacion) {
 }

@@ -111,10 +111,7 @@ public class MenuServiceImpl implements MenuService {
         if (!Boolean.TRUE.equals(item.getDisponible())) {
             throw BusinessRuleException.reglaNegocio("El ítem \"" + item.getNombre() + "\" no está disponible hoy.");
         }
-        if (item.getStockActual() < cantidad) {
-            throw BusinessRuleException.conflicto("Stock insuficiente de \"" + item.getNombre()
-                    + "\": quedan " + item.getStockActual() + " y se pidieron " + cantidad + ".");
-        }
+        // Stock ya no bloquea la venta; solo disponible/no disponible.
 
         item.setStockActual(item.getStockActual() - cantidad);
         return itemMenuRepository.save(item);
@@ -213,7 +210,7 @@ public class MenuServiceImpl implements MenuService {
     }
 
     private ItemMenuResponse aItemResponse(ItemMenu i) {
-        boolean disponible = Boolean.TRUE.equals(i.getDisponible()) && i.getStockActual() > 0;
+        boolean disponible = Boolean.TRUE.equals(i.getDisponible());
         return new ItemMenuResponse(i.getId(), i.getCategoria(), i.getNombre(), i.getDescripcion(),
                 i.getPrecio(), i.getStockActual(), disponible);
     }

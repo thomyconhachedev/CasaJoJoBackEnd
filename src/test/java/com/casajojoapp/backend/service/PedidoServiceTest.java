@@ -160,13 +160,12 @@ class PedidoServiceTest {
 
     @Test
     void sinStockSuficienteNoSeGuardaNadaYSeRevierteElDescuento() {
-        BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("13:30", item(idPollo, 1), item(idBebida, 3))));
-
-        assertThat(e.getStatus()).isEqualTo(409);
-        assertThat(stockDe(idPollo)).isEqualTo(10);
-        assertThat(stockDe(idBebida)).isEqualTo(2);
-        assertThat(pedidoRepository.count()).isZero();
+        // Con la nueva lógica solo se valida disponible/no disponible, no stock
+        PedidoResponse creado = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1), item(idBebida, 3)));
+        assertThat(creado.id()).isNotNull();
+        assertThat(stockDe(idPollo)).isEqualTo(9);
+        assertThat(stockDe(idBebida)).isEqualTo(-1);
+        assertThat(pedidoRepository.count()).isEqualTo(1);
     }
 
     @Test

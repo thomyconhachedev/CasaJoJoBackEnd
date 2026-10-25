@@ -38,4 +38,7 @@ public class DetallePedido {
 
     @Column(name = "precio_historico", nullable = false, precision = 10, scale = 2)
     private BigDecimal precioHistorico;
+
+    @Column(length = 255)
+    private String observacion;
 }

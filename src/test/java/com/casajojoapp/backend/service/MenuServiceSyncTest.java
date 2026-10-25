@@ -195,11 +195,9 @@ class MenuServiceSyncTest {
         menuService.sincronizarConGoogleSheets();
         Long idCarne = idPorCodigo(2L);
 
-        BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> menuService.descontarStock(idCarne, 6));
-
-        assertThat(e.getStatus()).isEqualTo(409);
-        assertThat(buscarPorCodigo(2L).getStockActual()).isEqualTo(5);
+        // Con la nueva lógica solo se valida disponible/no disponible, no stock
+        menuService.descontarStock(idCarne, 6);
+        assertThat(buscarPorCodigo(2L).getStockActual()).isEqualTo(-1);
     }
 
     @Test
