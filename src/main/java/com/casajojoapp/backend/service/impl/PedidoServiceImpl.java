@@ -16,6 +16,7 @@ import com.casajojoapp.backend.exception.BusinessRuleException;
 import com.casajojoapp.backend.exception.ResourceNotFoundException;
 import com.casajojoapp.backend.repository.MenuDiarioRepository;
 import com.casajojoapp.backend.repository.PedidoRepository;
+import com.casajojoapp.backend.repository.UsuarioRepository;
 import com.casajojoapp.backend.service.MenuService;
 import com.casajojoapp.backend.service.PedidoService;
 import org.springframework.stereotype.Service;
@@ -46,15 +47,18 @@ public class PedidoServiceImpl implements PedidoService {
 
     private final PedidoRepository pedidoRepository;
     private final MenuDiarioRepository menuDiarioRepository;
+    private final UsuarioRepository usuarioRepository;
     private final MenuService menuService;
     private final Clock clock;
 
     public PedidoServiceImpl(PedidoRepository pedidoRepository,
                              MenuDiarioRepository menuDiarioRepository,
+                             UsuarioRepository usuarioRepository,
                              MenuService menuService,
                              Clock clock) {
         this.pedidoRepository = pedidoRepository;
         this.menuDiarioRepository = menuDiarioRepository;
+        this.usuarioRepository = usuarioRepository;
         this.menuService = menuService;
         this.clock = clock;
     }
@@ -65,7 +69,7 @@ public class PedidoServiceImpl implements PedidoService {
      */
     @Override
     @Transactional
-    public PedidoResponse crearPedido(CrearPedidoRequest request) {
+    public PedidoResponse crearPedido(CrearPedidoRequest request, Long usuarioId) {
         if (request == null || request.items() == null || request.items().isEmpty()) {
             throw BusinessRuleException.invalida("El pedido debe incluir al menos un ítem del menú.");
         }
@@ -125,7 +129,9 @@ public class PedidoServiceImpl implements PedidoService {
         }
 
         Pedido pedido = new Pedido();
-        pedido.setUsuarioId(request.usuarioId());
+        if (usuarioId != null) {
+            pedido.setUsuario(usuarioRepository.getReferenceById(usuarioId));
+        }
         pedido.setNombreCliente(nombre);
         pedido.setTelefonoContacto(telefono);
         pedido.setHoraRetiro(horaRetiro);
@@ -273,6 +279,7 @@ public class PedidoServiceImpl implements PedidoService {
         return new PedidoResponse(
                 p.getId(),
                 p.getCodigoSeguimiento(),
+                p.getUsuario() == null ? null : p.getUsuario().getId(),
                 p.getEstado().name(),
                 p.getHoraRetiro().format(HORA),
                 p.getNombreCliente(),

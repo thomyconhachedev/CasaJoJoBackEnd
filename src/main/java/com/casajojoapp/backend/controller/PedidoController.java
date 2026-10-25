@@ -4,11 +4,13 @@ import com.casajojoapp.backend.dto.request.CambioEstadoRequest;
 import com.casajojoapp.backend.dto.request.CrearPedidoRequest;
 import com.casajojoapp.backend.dto.response.PedidoResponse;
 import com.casajojoapp.backend.dto.response.ResumenCocinaResponse;
+import com.casajojoapp.backend.entity.Usuario;
 import com.casajojoapp.backend.enums.EstadoPedido;
 import com.casajojoapp.backend.service.PedidoService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,8 +27,13 @@ public class PedidoController {
     }
 
     @PostMapping
-    public ResponseEntity<PedidoResponse> crear(@Valid @RequestBody CrearPedidoRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(pedidoService.crearPedido(request));
+    public ResponseEntity<PedidoResponse> crear(@Valid @RequestBody CrearPedidoRequest request,
+                                                Authentication authentication) {
+        // Sin sesion (invitado) el pedido queda con usuario null; con sesion se usa el id del token.
+        Long usuarioId = (authentication != null && authentication.getPrincipal() instanceof Usuario usuario)
+                ? usuario.getId()
+                : null;
+        return ResponseEntity.status(HttpStatus.CREATED).body(pedidoService.crearPedido(request, usuarioId));
     }
 
     @GetMapping

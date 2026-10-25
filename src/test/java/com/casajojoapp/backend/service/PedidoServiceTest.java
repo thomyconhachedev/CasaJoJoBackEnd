@@ -79,7 +79,7 @@ class PedidoServiceTest {
 
     @Test
     void creaElPedidoCalculaElMontoDescuentaStockYGuardaLosPrecios() {
-        PedidoResponse r = pedidoService.crearPedido(pedido("13:30", item(idPollo, 2), item(idBebida, 1)));
+        PedidoResponse r = crear(pedido("13:30", item(idPollo, 2), item(idBebida, 1)));
 
         assertThat(r.id()).isNotNull();
         assertThat(r.estado()).isEqualTo("RECIBIDO");
@@ -96,7 +96,7 @@ class PedidoServiceTest {
 
     @Test
     void sumaLasCantidadesDeUnMismoItemRepetido() {
-        PedidoResponse r = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1), item(idPollo, 2)));
+        PedidoResponse r = crear(pedido("13:30", item(idPollo, 1), item(idPollo, 2)));
 
         assertThat(r.detalles()).hasSize(1);
         assertThat(r.detalles().get(0).cantidad()).isEqualTo(3);
@@ -107,7 +107,7 @@ class PedidoServiceTest {
     @Test
     void conservaElPlatoIdPorLineaAunqueDosPlatosPidanElMismoProducto() {
         // Dos platos del mismo pedido: plato 1 = pollo + arroz, plato 2 = pollo + bebida.
-        PedidoResponse r = pedidoService.crearPedido(pedido("13:30",
+        PedidoResponse r = crear(pedido("13:30",
                 item(idPollo, 1, 1, "Sin sal"),
                 item(idArroz, 1, 1, "Sin sal"),
                 item(idPollo, 1, 2, null),
@@ -138,7 +138,7 @@ class PedidoServiceTest {
 
     @Test
     void elPrecioQuedaCongeladoAunqueElMenuCambie() {
-        PedidoResponse creado = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1)));
+        PedidoResponse creado = crear(pedido("13:30", item(idPollo, 1)));
 
         source.setContenido(CSV_MENU.replace("3500", "4000"));
         menuService.sincronizarConGoogleSheets();
@@ -151,20 +151,20 @@ class PedidoServiceTest {
     @Test
     void rechazaUnaHoraConMenosDe20MinutosDeAnticipacion() {
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("10:19", item(idPollo, 1))));
+                () -> crear(pedido("10:19", item(idPollo, 1))));
 
         assertThat(e.getStatus()).isEqualTo(422);
         assertThat(e.getMessage()).contains("20 minutos");
         assertThat(stockDe(idPollo)).isEqualTo(10);
 
         // Justo en el limite (10:00 + 20 min) si se acepta.
-        assertThat(pedidoService.crearPedido(pedido("10:20", item(idPollo, 1))).horaRetiro()).isEqualTo("10:20");
+        assertThat(crear(pedido("10:20", item(idPollo, 1))).horaRetiro()).isEqualTo("10:20");
     }
 
     @Test
     void rechazaUnaHoraConFormatoInvalido() {
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("25:99", item(idPollo, 1))));
+                () -> crear(pedido("25:99", item(idPollo, 1))));
 
         assertThat(e.getStatus()).isEqualTo(400);
     }
@@ -174,7 +174,7 @@ class PedidoServiceTest {
         CrearPedidoRequest sinItems = new CrearPedidoRequest(null, "Juan Pérez", "", "13:30", null, List.of());
 
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(sinItems));
+                () -> crear(sinItems));
 
         assertThat(e.getStatus()).isEqualTo(400);
     }
@@ -184,7 +184,7 @@ class PedidoServiceTest {
         menuService.cambiarEstadoMenu(EstadoMenu.CERRADO);
 
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("13:30", item(idPollo, 1))));
+                () -> crear(pedido("13:30", item(idPollo, 1))));
 
         assertThat(e.getStatus()).isEqualTo(422);
         assertThat(e.getMessage()).contains("cerrado");
@@ -193,8 +193,9 @@ class PedidoServiceTest {
 
     @Test
     void sinStockSuficienteNoSeGuardaNadaYSeRevierteElDescuento() {
-        // Con la nueva lógica solo se valida disponible/no disponible, no stock
-        PedidoResponse creado = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1), item(idBebida, 3)));
+        // Sin bloqueo por stock (decision del equipo): solo se valida
+        // disponible/no disponible; la venta procede aunque baje de 0.
+        PedidoResponse creado = crear(pedido("13:30", item(idPollo, 1), item(idBebida, 3)));
         assertThat(creado.id()).isNotNull();
         assertThat(stockDe(idPollo)).isEqualTo(9);
         assertThat(stockDe(idBebida)).isEqualTo(-1);
@@ -204,7 +205,7 @@ class PedidoServiceTest {
     @Test
     void rechazaUnItemNoDisponible() {
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("13:30", item(idPescado, 1))));
+                () -> crear(pedido("13:30", item(idPescado, 1))));
 
         assertThat(e.getStatus()).isEqualTo(422);
         assertThat(e.getMessage()).contains("no está disponible");
@@ -213,16 +214,16 @@ class PedidoServiceTest {
     @Test
     void rechazaUnItemInexistente() {
         BusinessRuleException e = assertThrows(BusinessRuleException.class,
-                () -> pedidoService.crearPedido(pedido("13:30", item(999_999L, 1))));
+                () -> crear(pedido("13:30", item(999_999L, 1))));
 
         assertThat(e.getStatus()).isEqualTo(400);
     }
 
     @Test
     void laColaDeCocinaEsFifoPorHoraDeRetiro() {
-        PedidoResponse tarde = pedidoService.crearPedido(pedido("14:00", item(idPollo, 1)));
-        PedidoResponse tempranoA = pedidoService.crearPedido(pedido("13:00", item(idArroz, 1)));
-        PedidoResponse tempranoB = pedidoService.crearPedido(pedido("13:00", item(idArroz, 1)));
+        PedidoResponse tarde = crear(pedido("14:00", item(idPollo, 1)));
+        PedidoResponse tempranoA = crear(pedido("13:00", item(idArroz, 1)));
+        PedidoResponse tempranoB = crear(pedido("13:00", item(idArroz, 1)));
 
         assertThat(pedidoService.obtenerColaCocina())
                 .extracting(PedidoResponse::id)
@@ -241,7 +242,7 @@ class PedidoServiceTest {
 
     @Test
     void laMaquinaDeEstadosSoloAvanzaDeAUno() {
-        PedidoResponse p = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1)));
+        PedidoResponse p = crear(pedido("13:30", item(idPollo, 1)));
 
         BusinessRuleException salto = assertThrows(BusinessRuleException.class,
                 () -> pedidoService.actualizarEstado(p.id(), EstadoPedido.LISTO_PARA_RETIRO));
@@ -266,7 +267,7 @@ class PedidoServiceTest {
 
     @Test
     void seConsultaPorCodigoDeSeguimiento() {
-        PedidoResponse p = pedidoService.crearPedido(pedido("13:30", item(idPollo, 1)));
+        PedidoResponse p = crear(pedido("13:30", item(idPollo, 1)));
 
         assertThat(pedidoService.obtenerPorCodigoSeguimiento(p.codigoSeguimiento().toLowerCase()).id())
                 .isEqualTo(p.id());
@@ -276,8 +277,8 @@ class PedidoServiceTest {
 
     @Test
     void elResumenDeCocinaSumaLasCantidadesPorItem() {
-        pedidoService.crearPedido(pedido("13:30", item(idPollo, 2), item(idBebida, 1)));
-        pedidoService.crearPedido(pedido("13:45", item(idPollo, 1)));
+        crear(pedido("13:30", item(idPollo, 2), item(idBebida, 1)));
+        crear(pedido("13:45", item(idPollo, 1)));
 
         ResumenCocinaResponse resumen = pedidoService.obtenerResumenCocina();
 
@@ -287,6 +288,11 @@ class PedidoServiceTest {
         assertThat(resumen.items())
                 .extracting(ItemCocinaResponse::nombreItem, ItemCocinaResponse::cantidadTotal)
                 .containsExactly(tuple("Coca-Cola Zero 350ml", 1), tuple("Pollo al Jugo", 3));
+    }
+
+    /** Pedido de invitado: sin sesion, usuarioId null. */
+    private PedidoResponse crear(CrearPedidoRequest request) {
+        return pedidoService.crearPedido(request, null);
     }
 
     private CrearPedidoRequest pedido(String hora, ItemPedidoRequest... items) {

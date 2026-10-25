@@ -2,7 +2,7 @@ package com.casajojoapp.backend.exception;
 
 /**
  * Error de negocio con su codigo HTTP:
- * 400 datos mal formados, 409 choca con el estado actual (stock, transicion), 422 viola una regla del negocio.
+ * 400 datos mal formados, 401 credenciales incorrectas, 409 choca con el estado actual (stock, transicion), 422 viola una regla del negocio.
  */
 public class BusinessRuleException extends RuntimeException {
 
@@ -19,6 +19,10 @@ public class BusinessRuleException extends RuntimeException {
 
     public static BusinessRuleException invalida(String mensaje) {
         return new BusinessRuleException(400, mensaje);
+    }
+
+    public static BusinessRuleException noAutenticado(String mensaje) {
+        return new BusinessRuleException(401, mensaje);
     }
 
     public static BusinessRuleException conflicto(String mensaje) {
