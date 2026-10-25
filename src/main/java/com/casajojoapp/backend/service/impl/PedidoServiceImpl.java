@@ -74,22 +74,29 @@ public class PedidoServiceImpl implements PedidoService {
             throw BusinessRuleException.invalida("El nombre del cliente es obligatorio.");
         }
 
-        // Se agrupan los ítems repetidos y se ordenan por id: bloquear siempre en el mismo orden evita interbloqueos.
-        Map<Long, Integer> cantidades = new TreeMap<>();
-        // Guardar observacion por item si viene
-        Map<Long, String> observacionesPorItem = new java.util.HashMap<>();
+        // Se agrupan las lineas por (item, plato, observacion): el mismo
+        // producto pedido en DOS platos distintos queda en dos lineas para
+        // conservar el platoId (la appAndroid pinta "PLATO 1 DE 2", etc.).
+        // El orden de PROCESAMIENTO sigue siendo por itemMenuId para
+        // bloquear siempre en el mismo orden y evitar interbloqueos.
+        record ClaveDetalle(Long itemMenuId, Integer platoId, String observacion) {}
+        Map<ClaveDetalle, Integer> cantidades = new java.util.LinkedHashMap<>();
         for (ItemPedidoRequest item : request.items()) {
             if (item == null || item.itemMenuId() == null || item.cantidad() == null || item.cantidad() < 1) {
                 throw BusinessRuleException.invalida("Cada ítem debe indicar itemMenuId y una cantidad mayor o igual a 1.");
             }
-            cantidades.merge(item.itemMenuId(), item.cantidad(), Integer::sum);
-            if (item.observacion() != null && !item.observacion().trim().isBlank()) {
-                // Si hay varias lineas para el mismo item, concatenar o tomar la primera; aquí tomamos la primera no vacía
-                if (!observacionesPorItem.containsKey(item.itemMenuId())) {
-                    observacionesPorItem.put(item.itemMenuId(), item.observacion().trim());
-                }
-            }
+            String observacion = item.observacion() == null || item.observacion().trim().isBlank()
+                    ? null : item.observacion().trim();
+            cantidades.merge(
+                    new ClaveDetalle(item.itemMenuId(), item.platoId(), observacion),
+                    item.cantidad(),
+                    Integer::sum);
         }
+        List<Map.Entry<ClaveDetalle, Integer>> lineasAProcesar = cantidades.entrySet().stream()
+                .sorted(java.util.Comparator
+                        .comparing((Map.Entry<ClaveDetalle, Integer> e) -> e.getKey().itemMenuId())
+                        .thenComparingInt(e -> java.util.Objects.requireNonNullElse(e.getKey().platoId(), 0)))
+                .toList();
 
         LocalDateTime ahora = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES);
         MenuDiario menu = menuDiarioRepository.findByFecha(ahora.toLocalDate())
@@ -128,17 +135,17 @@ public class PedidoServiceImpl implements PedidoService {
 
         // El precio lo calcula el servidor y queda congelado en cada detalle (precio_historico).
         BigDecimal total = BigDecimal.ZERO;
-        for (Map.Entry<Long, Integer> entrada : cantidades.entrySet()) {
-            ItemMenu item = menuService.descontarStock(entrada.getKey(), entrada.getValue());
+        for (Map.Entry<ClaveDetalle, Integer> entrada : lineasAProcesar) {
+            ClaveDetalle clave = entrada.getKey();
+            ItemMenu item = menuService.descontarStock(clave.itemMenuId(), entrada.getValue());
 
             DetallePedido detalle = new DetallePedido();
             detalle.setItemMenuId(item.getId());
             detalle.setNombreItem(item.getNombre());
             detalle.setCantidad(entrada.getValue());
             detalle.setPrecioHistorico(item.getPrecio());
-            // Buscar observacion para este item si viene en el request
-            String obsItem = observacionesPorItem.get(entrada.getKey());
-            detalle.setObservacion(obsItem);
+            detalle.setObservacion(clave.observacion());
+            detalle.setPlatoId(clave.platoId());
             pedido.agregarDetalle(detalle);
 
             total = total.add(item.getPrecio().multiply(BigDecimal.valueOf(entrada.getValue())));
@@ -261,7 +268,7 @@ public class PedidoServiceImpl implements PedidoService {
 
     private PedidoResponse aResponse(Pedido p) {
         List<DetallePedidoResponse> detalles = p.getDetalles().stream()
-                .map(d -> new DetallePedidoResponse(d.getItemMenuId(), d.getNombreItem(), d.getCantidad(), d.getPrecioHistorico(), d.getObservacion()))
+                .map(d -> new DetallePedidoResponse(d.getItemMenuId(), d.getNombreItem(), d.getCantidad(), d.getPrecioHistorico(), d.getObservacion(), d.getPlatoId()))
                 .toList();
         return new PedidoResponse(
                 p.getId(),

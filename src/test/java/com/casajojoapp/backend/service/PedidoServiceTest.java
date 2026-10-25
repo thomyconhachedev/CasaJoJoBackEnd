@@ -2,6 +2,7 @@ package com.casajojoapp.backend.service;
 
 import com.casajojoapp.backend.dto.request.CrearPedidoRequest;
 import com.casajojoapp.backend.dto.request.ItemPedidoRequest;
+import com.casajojoapp.backend.dto.response.DetallePedidoResponse;
 import com.casajojoapp.backend.dto.response.ItemCocinaResponse;
 import com.casajojoapp.backend.dto.response.PedidoResponse;
 import com.casajojoapp.backend.dto.response.ResumenCocinaResponse;
@@ -101,6 +102,38 @@ class PedidoServiceTest {
         assertThat(r.detalles().get(0).cantidad()).isEqualTo(3);
         assertThat(r.montoTotal()).isEqualByComparingTo("10500");
         assertThat(stockDe(idPollo)).isEqualTo(7);
+    }
+
+    @Test
+    void conservaElPlatoIdPorLineaAunqueDosPlatosPidanElMismoProducto() {
+        // Dos platos del mismo pedido: plato 1 = pollo + arroz, plato 2 = pollo + bebida.
+        PedidoResponse r = pedidoService.crearPedido(pedido("13:30",
+                item(idPollo, 1, 1, "Sin sal"),
+                item(idArroz, 1, 1, "Sin sal"),
+                item(idPollo, 1, 2, null),
+                item(idBebida, 1, 2, null)));
+
+        // El mismo producto en platos distintos NO se fusiona: son 4 líneas.
+        assertThat(r.detalles()).hasSize(4);
+        assertThat(r.detalles())
+                .extracting(d -> d.platoId(), DetallePedidoResponse::itemMenuId)
+                .containsExactlyInAnyOrder(
+                        tuple(1, idPollo), tuple(1, idArroz),
+                        tuple(2, idPollo), tuple(2, idBebida));
+
+        // La observación pertenece al plato 1 y no contamina al plato 2.
+        DetallePedidoResponse polloPlato1 = r.detalles().stream()
+                .filter(d -> idPollo.equals(d.itemMenuId()) && Integer.valueOf(1).equals(d.platoId()))
+                .findFirst().orElseThrow();
+        DetallePedidoResponse polloPlato2 = r.detalles().stream()
+                .filter(d -> idPollo.equals(d.itemMenuId()) && Integer.valueOf(2).equals(d.platoId()))
+                .findFirst().orElseThrow();
+        assertThat(polloPlato1.observacion()).isEqualTo("Sin sal");
+        assertThat(polloPlato2.observacion()).isNull();
+
+        // El stock se descuenta por el total (2 pollos), una sola vez por línea.
+        assertThat(stockDe(idPollo)).isEqualTo(8);
+        assertThat(stockDe(idArroz)).isEqualTo(9);
     }
 
     @Test
@@ -262,6 +295,10 @@ class PedidoServiceTest {
 
     private ItemPedidoRequest item(Long id, int cantidad) {
         return new ItemPedidoRequest(id, cantidad);
+    }
+
+    private ItemPedidoRequest item(Long id, int cantidad, int platoId, String observacion) {
+        return new ItemPedidoRequest(id, cantidad, observacion, platoId);
     }
 
     private Long idDe(String nombre) {

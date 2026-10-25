@@ -7,5 +7,7 @@ public record DetallePedidoResponse(
         String nombreItem,
         Integer cantidad,
         BigDecimal precioUnitario,
-        String observacion) {
+        String observacion,
+        Integer platoId
+) {
 }

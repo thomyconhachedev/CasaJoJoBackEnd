@@ -11,9 +11,20 @@ public record ItemPedidoRequest(
         @Min(value = 1, message = "La cantidad debe ser al menos 1")
         Integer cantidad,
 
-        String observacion
+        String observacion,
+
+        /**
+         * Indice del plato al que pertenece la linea (1..N dentro del pedido).
+         * La app Android lo envia para que cocina vea cada combinacion por
+         * separado; null cuando el cliente no lo manda (compatibilidad).
+         */
+        Integer platoId
 ) {
     public ItemPedidoRequest(Long itemMenuId, Integer cantidad) {
-        this(itemMenuId, cantidad, null);
+        this(itemMenuId, cantidad, null, null);
+    }
+
+    public ItemPedidoRequest(Long itemMenuId, Integer cantidad, String observacion) {
+        this(itemMenuId, cantidad, observacion, null);
     }
 }

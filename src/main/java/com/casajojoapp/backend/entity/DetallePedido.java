@@ -41,4 +41,8 @@ public class DetallePedido {
 
     @Column(length = 255)
     private String observacion;
+
+    /** Indice del plato (1..N) al que pertenece la linea; null si no viene. */
+    @Column(name = "plato_id")
+    private Integer platoId;
 }
