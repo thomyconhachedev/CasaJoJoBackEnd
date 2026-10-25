@@ -6,6 +6,7 @@ import java.util.List;
 public record PedidoResponse(
         Long id,
         String codigoSeguimiento,
+        Long usuarioId,
         String estado,
         String horaRetiro,
         String nombreCliente,

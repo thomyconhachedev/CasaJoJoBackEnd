@@ -9,7 +9,11 @@ import java.util.List;
 
 public interface PedidoService {
 
-    PedidoResponse crearPedido(CrearPedidoRequest request);
+    /**
+     * usuarioId es el de la sesion (token); null si el pedido es de un invitado.
+     * El usuarioId que venga dentro del cuerpo de la peticion se ignora: nadie puede pedir a nombre de otro.
+     */
+    PedidoResponse crearPedido(CrearPedidoRequest request, Long usuarioId);
 
     PedidoResponse obtenerPedido(Long id);
 

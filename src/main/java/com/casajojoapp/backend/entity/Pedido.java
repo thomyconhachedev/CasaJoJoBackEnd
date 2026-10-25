@@ -26,9 +26,10 @@ public class Pedido {
     @Column(name = "codigo_seguimiento", nullable = false, unique = true, length = 20)
     private String codigoSeguimiento;
 
-    /** Reservado para los clientes registrados (modulo de usuarios). Null en pedidos anonimos. */
-    @Column(name = "usuario_id")
-    private Long usuarioId;
+    /** Cliente registrado que hizo el pedido. Null si fue un invitado (sin cuenta). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
 
     @Column(name = "nombre_cliente", nullable = false, length = 100)
     private String nombreCliente;
