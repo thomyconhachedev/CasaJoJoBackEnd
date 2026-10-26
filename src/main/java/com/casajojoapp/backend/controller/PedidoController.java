@@ -6,6 +6,7 @@ import com.casajojoapp.backend.dto.response.PedidoResponse;
 import com.casajojoapp.backend.dto.response.ResumenCocinaResponse;
 import com.casajojoapp.backend.entity.Usuario;
 import com.casajojoapp.backend.enums.EstadoPedido;
+import com.casajojoapp.backend.exception.BusinessRuleException;
 import com.casajojoapp.backend.service.PedidoService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,15 @@ public class PedidoController {
     @GetMapping
     public ResponseEntity<List<PedidoResponse>> listar(@RequestParam(required = false) String estado) {
         return ResponseEntity.ok(pedidoService.listarPedidos(estado));
+    }
+
+    /** Pedidos de la cuenta autenticada: el usuario normal ve los suyos (la cola completa es de admin). */
+    @GetMapping("/mios")
+    public ResponseEntity<List<PedidoResponse>> misPedidos(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Usuario usuario)) {
+            throw BusinessRuleException.noAutenticado("Debes iniciar sesión para ver tus pedidos.");
+        }
+        return ResponseEntity.ok(pedidoService.listarPedidosDeUsuario(usuario.getId()));
     }
 
     @GetMapping("/cola")

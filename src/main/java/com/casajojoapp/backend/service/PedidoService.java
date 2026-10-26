@@ -22,6 +22,9 @@ public interface PedidoService {
     /** Todos los pedidos (o solo los de un estado), por hora de retiro. */
     List<PedidoResponse> listarPedidos(String estado);
 
+    /** Pedidos de una cuenta concreta (usuarioId del token), más recientes primero. */
+    List<PedidoResponse> listarPedidosDeUsuario(Long usuarioId);
+
     /** Cola FIFO de cocina: pedidos RECIBIDO y EN_PREPARACION, por hora de retiro ascendente. */
     List<PedidoResponse> obtenerColaCocina();
 

@@ -41,6 +41,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/registro").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/pedidos").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/pedidos/seguimiento/*").permitAll()
+                        // El usuario normal consulta SUS pedidos con su token
+                        // (la cola completa de aca arriba es solo de admin).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pedidos/mios").authenticated()
                         .requestMatchers("/api/v1/menu/**", "/api/v1/pedidos/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e

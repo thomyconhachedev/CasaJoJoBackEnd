@@ -6,13 +6,16 @@ import com.casajojoapp.backend.dto.response.DetallePedidoResponse;
 import com.casajojoapp.backend.dto.response.ItemCocinaResponse;
 import com.casajojoapp.backend.dto.response.PedidoResponse;
 import com.casajojoapp.backend.dto.response.ResumenCocinaResponse;
+import com.casajojoapp.backend.entity.Usuario;
 import com.casajojoapp.backend.enums.EstadoMenu;
 import com.casajojoapp.backend.enums.EstadoPedido;
+import com.casajojoapp.backend.enums.Rol;
 import com.casajojoapp.backend.exception.BusinessRuleException;
 import com.casajojoapp.backend.exception.ResourceNotFoundException;
 import com.casajojoapp.backend.repository.ItemMenuRepository;
 import com.casajojoapp.backend.repository.MenuDiarioRepository;
 import com.casajojoapp.backend.repository.PedidoRepository;
+import com.casajojoapp.backend.repository.UsuarioRepository;
 import com.casajojoapp.backend.support.TestSupportConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -55,6 +59,9 @@ class PedidoServiceTest {
     private PedidoRepository pedidoRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
     private TestSupportConfig.StubMenuCsvSource source;
 
     private Long idPollo;
@@ -65,6 +72,12 @@ class PedidoServiceTest {
     @BeforeEach
     void preparar() {
         pedidoRepository.deleteAll();
+        // Solo los usuarios creados por ESTA clase (prefijo "mios-"): un
+        // deleteAll borraría al admin sembrado al arrancar y rompería
+        // UsuarioServiceTest, que depende de esa cuenta.
+        usuarioRepository.findAll().stream()
+                .filter(u -> u.getUsername() != null && u.getUsername().startsWith("mios-"))
+                .forEach(usuarioRepository::delete);
         itemMenuRepository.deleteAll();
         menuDiarioRepository.deleteAll();
 
@@ -134,6 +147,40 @@ class PedidoServiceTest {
         // El stock se descuenta por el total (2 pollos), una sola vez por línea.
         assertThat(stockDe(idPollo)).isEqualTo(8);
         assertThat(stockDe(idArroz)).isEqualTo(9);
+    }
+
+    @Test
+    void elTotalDelPedidoIncluyeLaBaseDeCadaPlatoYSoloLosExtrasAparte() {
+        // 2 platos => base 2 x 4800 + extra bebida 1500. El precio del item
+        // base (pollo 3500 del Sheet) NO suma: la app cobra el plato fijo.
+        PedidoResponse r = crear(pedido("13:30",
+                item(idPollo, 1, 1, null), item(idArroz, 1, 1, null),
+                item(idPollo, 1, 2, null), item(idBebida, 1, 2, null)));
+
+        assertThat(r.montoTotal()).isEqualByComparingTo("11100.00");
+    }
+
+    @Test
+    void listarPedidosDeUsuarioSoloDevuelveLosDeEsaCuenta() {
+        Usuario cliente = new Usuario();
+        cliente.setUsername("mios-ana");
+        cliente.setPassword("hash-de-prueba-que-no-se-usa-123456");
+        cliente.setRol(Rol.USUARIO);
+        cliente.setNombre("Ana");
+        cliente.setCreadoEn(LocalDateTime.now());
+        cliente = usuarioRepository.save(cliente);
+
+        // Un pedido de la cuenta y otro de un invitado.
+        pedidoService.crearPedido(pedido("13:30", item(idPollo, 1)), cliente.getId());
+        pedidoService.crearPedido(pedido("13:40", item(idArroz, 1)), null);
+
+        List<PedidoResponse> mios = pedidoService.listarPedidosDeUsuario(cliente.getId());
+
+        assertThat(mios).hasSize(1);
+        assertThat(mios.get(0).usuarioId()).isEqualTo(cliente.getId());
+        // Invitados y consultas sin usuario no devuelven nada (o solo lo propio).
+        assertThat(pedidoService.listarPedidosDeUsuario(null)).isEmpty();
+        assertThat(pedidoService.listarPedidosDeUsuario(999L)).isEmpty();
     }
 
     @Test

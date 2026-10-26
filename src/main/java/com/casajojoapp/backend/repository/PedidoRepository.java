@@ -21,4 +21,7 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByEstadoOrderByHoraRetiroAscIdAsc(EstadoPedido estado);
 
     List<Pedido> findByEstadoInOrderByHoraRetiroAscIdAsc(Collection<EstadoPedido> estados);
+
+    /** Pedidos de una cuenta, los más recientes primero (para GET /pedidos/mios). */
+    List<Pedido> findByUsuario_IdOrderByFechaCreacionDesc(Long usuarioId);
 }

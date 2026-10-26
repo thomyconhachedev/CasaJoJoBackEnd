@@ -19,6 +19,7 @@ import com.casajojoapp.backend.repository.PedidoRepository;
 import com.casajojoapp.backend.repository.UsuarioRepository;
 import com.casajojoapp.backend.service.MenuService;
 import com.casajojoapp.backend.service.PedidoService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,9 +31,11 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -50,17 +53,21 @@ public class PedidoServiceImpl implements PedidoService {
     private final UsuarioRepository usuarioRepository;
     private final MenuService menuService;
     private final Clock clock;
+    /** Base de cada plato (la app muestra $4.800): hoy fija, en el futuro por tipo de plato. */
+    private final int precioPlatoBase;
 
     public PedidoServiceImpl(PedidoRepository pedidoRepository,
                              MenuDiarioRepository menuDiarioRepository,
                              UsuarioRepository usuarioRepository,
                              MenuService menuService,
-                             Clock clock) {
+                             Clock clock,
+                             @Value("${negocio.precio-plato-base:4800}") int precioPlatoBase) {
         this.pedidoRepository = pedidoRepository;
         this.menuDiarioRepository = menuDiarioRepository;
         this.usuarioRepository = usuarioRepository;
         this.menuService = menuService;
         this.clock = clock;
+        this.precioPlatoBase = precioPlatoBase;
     }
 
     /**
@@ -139,23 +146,41 @@ public class PedidoServiceImpl implements PedidoService {
         pedido.setEstado(EstadoPedido.RECIBIDO);
         pedido.setFechaCreacion(clock.instant());
 
-        // El precio lo calcula el servidor y queda congelado en cada detalle (precio_historico).
-        BigDecimal total = BigDecimal.ZERO;
+        // TOTAL (regla de negocio de la app): cada plato cuesta la BASE
+        // (negocio.precio-plato-base = 4800) y SOLO los extras (postres y
+        // bebidas) suman aparte; los precios de los items base que vienen
+        // del Sheet NO se suman. Los pedidos sin platoId (clientes viejos)
+        // conservan el calculo historico: suma directa de precios de items.
+        BigDecimal sumaHistorica = BigDecimal.ZERO;
+        BigDecimal sumaExtras = BigDecimal.ZERO;
+        Set<Integer> platosDelPedido = new LinkedHashSet<>();
         for (Map.Entry<ClaveDetalle, Integer> entrada : lineasAProcesar) {
             ClaveDetalle clave = entrada.getKey();
             ItemMenu item = menuService.descontarStock(clave.itemMenuId(), entrada.getValue());
+            int cantidad = entrada.getValue();
 
             DetallePedido detalle = new DetallePedido();
             detalle.setItemMenuId(item.getId());
             detalle.setNombreItem(item.getNombre());
-            detalle.setCantidad(entrada.getValue());
+            detalle.setCantidad(cantidad);
             detalle.setPrecioHistorico(item.getPrecio());
             detalle.setObservacion(clave.observacion());
             detalle.setPlatoId(clave.platoId());
             pedido.agregarDetalle(detalle);
 
-            total = total.add(item.getPrecio().multiply(BigDecimal.valueOf(entrada.getValue())));
+            sumaHistorica = sumaHistorica.add(item.getPrecio().multiply(BigDecimal.valueOf(cantidad)));
+            if (clave.platoId() != null) {
+                platosDelPedido.add(clave.platoId());
+            }
+            if (esExtra(item.getCategoria())) {
+                sumaExtras = sumaExtras.add(item.getPrecio().multiply(BigDecimal.valueOf(cantidad)));
+            }
         }
+        BigDecimal total = platosDelPedido.isEmpty()
+                ? sumaHistorica
+                : BigDecimal.valueOf(precioPlatoBase)
+                        .multiply(BigDecimal.valueOf(platosDelPedido.size()))
+                        .add(sumaExtras);
         pedido.setMontoTotal(total.setScale(2, RoundingMode.HALF_UP));
         pedido.setCodigoSeguimiento(generarCodigoSeguimiento());
 
@@ -270,6 +295,26 @@ public class PedidoServiceImpl implements PedidoService {
                 longitud++;
             }
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PedidoResponse> listarPedidosDeUsuario(Long usuarioId) {
+        if (usuarioId == null) {
+            return List.of();
+        }
+        return pedidoRepository.findByUsuario_IdOrderByFechaCreacionDesc(usuarioId).stream()
+                .map(this::aResponse)
+                .toList();
+    }
+
+    /** Postres y bebidas: los unicos que suman aparte de la base del plato. */
+    private static boolean esExtra(String categoria) {
+        if (categoria == null) {
+            return false;
+        }
+        String c = categoria.toUpperCase(Locale.ROOT);
+        return c.contains("BEBIDA") || c.contains("POSTRE");
     }
 
     private PedidoResponse aResponse(Pedido p) {
