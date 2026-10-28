@@ -36,3 +36,8 @@ build/
 .env
 .env.*
 !.env.example
+
+# Internos del equipo (no se publican en GitHub)
+/PLAN-IMPLEMENTACION.md
+/Manual Monolito Spring Boot CasaJoJoApp.pdf
+/.env.example
